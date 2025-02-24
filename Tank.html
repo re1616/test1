@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Танчики</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+        }
+        canvas {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Установка размеров холста
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        // Класс для танка
+        class Tank {
+            constructor(x, y, color, controls) {
+                this.x = x;
+                this.y = y;
+                this.width = 30;
+                this.height = 30;
+                this.color = color;
+                this.speed = 4;
+                this.angle = 0; // Угол поворота
+                this.controls = controls; // Клавиши управления
+                this.bullets = [];
+                this.isAuto = controls.isAuto || false; // Флаг для автоматического управления
+            }
+
+            draw() {
+                ctx.save();
+                ctx.translate(this.x + this.width / 2, this.y + this.height / 2);
+                ctx.rotate(this.angle);
+                ctx.fillStyle = this.color;
+                ctx.fillRect(-this.width / 2, -this.height / 2, this.width, this.height);
+                ctx.restore();
+            }
+
+            move(targetTank = null) {
+                if (this.isAuto && targetTank) {
+                    // Автоматическое движение к целевому танку
+                    const dx = targetTank.x + targetTank.width / 2 - (this.x + this.width / 2);
+                    const dy = targetTank.y + targetTank.height / 2 - (this.y + this.height / 2);
+                    this.angle = Math.atan2(dy, dx);
+
+                    // Движение к цели
+                    this.x += Math.cos(this.angle) * this.speed;
+                    this.y += Math.sin(this.angle) * this.speed;
+                } else {
+                    // Ручное управление
+                    if (keys[this.controls.up]) this.y -= this.speed;
+                    if (keys[this.controls.down]) this.y += this.speed;
+                    if (keys[this.controls.left]) this.x -= this.speed;
+                    if (keys[this.controls.right]) this.x += this.speed;
+                }
+
+                // Ограничение движения внутри поля
+                this.x = Math.max(0, Math.min(canvas.width - this.width, this.x));
+                this.y = Math.max(0, Math.min(canvas.height - this.height, this.y));
+
+                // Проверка столкновений со стенами
+                walls.forEach(wall => {
+                    if (
+                        this.x < wall.x + wall.width &&
+                        this.x + this.width > wall.x &&
+                        this.y < wall.y + wall.height &&
+                        this.y + this.height > wall.y
+                    ) {
+                        // Если столкнулись, откатываем позицию
+                        this.x = Math.max(wall.x + wall.width, Math.min(this.x, wall.x - this.width));
+                        this.y = Math.max(wall.y + wall.height, Math.min(this.y, wall.y - this.height));
+                    }
+                });
+            }
+
+            shoot(targetTank = null) {
+                if (this.isAuto && targetTank) {
+                    // Автоматическая стрельба по целевому танку
+                    const dx = targetTank.x + targetTank.width / 2 - (this.x + this.width / 2);
+                    const dy = targetTank.y + targetTank.height / 2 - (this.y + this.height / 2);
+                    const angleToTarget = Math.atan2(dy, dx);
+
+                    // Стреляем только если расстояние достаточно близко
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    if (distance < 200) {
+                        this.bullets.push(new Bullet(this.x + this.width / 2, this.y + this.height / 2, angleToTarget));
+                    }
+                } else if (keys[this.controls.shoot]) {
+                    this.bullets.push(new Bullet(this.x + this.width / 2, this.y + this.height / 2, this.angle));
+                    keys[this.controls.shoot] = false; // Отключение повторной стрельбы при удерживании клавиши
+                }
+            }
+        }
+
+        // Класс для пули
+        class Bullet {
+            constructor(x, y, angle) {
+                this.x = x;
+                this.y = y;
+                this.radius = 5;
+                this.speed = 7;
+                this.angle = angle;
+            }
+
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fillStyle = 'red';
+                ctx.fill();
+                ctx.closePath();
+            }
+
+            update() {
+                this.x += Math.cos(this.angle) * this.speed;
+                this.y += Math.sin(this.angle) * this.speed;
+
+                // Удаление пули, если она вышла за пределы экрана или столкнулась со стеной
+                if (this.x < 0 || this.x > canvas.width || this.y < 0 || this.y > canvas.height) {
+                    return false;
+                }
+
+                walls.forEach(wall => {
+                    if (
+                        this.x > wall.x &&
+                        this.x < wall.x + wall.width &&
+                        this.y > wall.y &&
+                        this.y < wall.y + wall.height
+                    ) {
+                        return false; // Удаляем пулю при столкновении со стеной
+                    }
+                });
+
+                return true;
+            }
+        }
+
+        // Класс для стен
+        class Wall {
+            constructor(x, y, width, height, color) {
+                this.x = x;
+                this.y = y;
+                this.width = width;
+                this.height = height;
+                this.color = color;
+            }
+
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.fillRect(this.x, this.y, this.width, this.height);
+            }
+        }
+
+        // Объект для отслеживания нажатых клавиш
+        const keys = {};
+        window.addEventListener('keydown', (e) => keys[e.key] = true);
+        window.addEventListener('keyup', (e) => keys[e.key] = false);
+
+        // Создание танков
+        const tank1 = new Tank(50, 50, 'blue', { isAuto: true }); // Автоматический танк
+        const tank2 = new Tank(canvas.width - 80, canvas.height - 80, 'green', { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight', shoot: 'Enter' });
+
+        const tanks = [tank1, tank2];
+
+        // Создание стен
+        const walls = [
+            new Wall(200, 200, 50, 200, 'gray'),
+            new Wall(400, 400, 200, 50, 'gray'),
+            new Wall(600, 100, 50, 150, 'gray')
+        ];
+
+        function gameLoop() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Отрисовка стен
+            walls.forEach(wall => wall.draw());
+
+            tanks.forEach((tank, index) => {
+                tank.move(index === 0 ? tank2 : null); // Первый танк движется автоматически к второму
+                tank.draw();
+                tank.shoot(index === 0 ? tank2 : null); // Первый танк стреляет автоматически по второму
+
+                // Обновление пуль
+                tank.bullets = tank.bullets.filter(bullet => {
+                    bullet.draw();
+                    return bullet.update(); // Удаляем пулю, если она вне экрана или столкнулась со стеной
+                });
+
+                // Проверка столкновений между пулями и танками
+                tanks.forEach(targetTank => {
+                    if (tank !== targetTank) {
+                        tank.bullets.forEach((bullet, bulletIndex) => {
+                            const dx = bullet.x - (targetTank.x + targetTank.width / 2);
+                            const dy = bullet.y - (targetTank.y + targetTank.height / 2);
+                            const distance = Math.sqrt(dx * dx + dy * dy);
+
+                            if (distance < targetTank.width / 2 + bullet.radius) {
+                                tank.bullets.splice(bulletIndex, 1); // Удаляем пулю
+                                console.log(`Танк ${tanks.indexOf(targetTank) + 1} подбит!`);
+                            }
+                        });
+                    }
+                });
+            });
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        gameLoop();
+    </script>
+</body>
+</html>
