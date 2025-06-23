@@ -2,5 +2,5 @@
 Расширенная информация о репо
 
 
-<a href="intent://com.android.settings/#Intent;scheme=android-app;end" data-wpel-link="internal"> Setting</a>
+<a href="intent://com.android.settings/#Intent;scheme=android-app;end"> Нажми Setting </a>
 
